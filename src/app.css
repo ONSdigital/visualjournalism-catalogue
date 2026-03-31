@@ -1,0 +1,133 @@
+/* Use this file for app specific CSS and overrides */
+body{
+	max-width: 1080px;
+}
+
+.placeholder {
+	background: var(--ons-color-grey-10);
+	padding: 12px;
+	height: 300px;
+    width: 100%;
+	}
+
+.search-container{
+	display: flex;
+	flex-direction: row;
+	max-width: 700px;
+	margin: 8px 6px 0px 24px;
+}
+
+.options{
+	/* display: flex;
+	flex-direction: row; */
+	max-width: 700px;
+	margin: 8px 6px 24px 24px;
+}
+
+/* .grid-cell{
+	background: #ECECEC;
+	box-shadow: 3px 3px #A09FA0;
+	padding: 12px;
+	height: 100%;
+} */
+
+.bold{
+	font-weight: 600;
+}
+
+
+ul[class] {
+    margin: 0;
+    padding: 0;
+}
+
+ul[class] li {
+    list-style: none;
+}
+
+ul[class] li > * {
+    margin: 1rem;
+}
+
+/* [1] 'auto-fit' grid columns, so no media queries required. */
+/* [2] 'dense' packing fills in holes earlier in the grid. */
+.grid {
+    display: grid;
+    gap: 1rem;
+    grid-auto-flow: dense; /* [2] */
+    grid-template-columns: repeat(auto-fit, 20rem); /* [1] */
+}
+
+.grid > * {
+    align-items: flex-start;
+	background: #ECECEC;
+	box-shadow: 3px 3px #A09FA0;
+	padding: 12px;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+/* [3] Make fullwidth card span all grid columns. */
+.fullwidth {
+    grid-column: 1 / -1;
+}
+
+.expanded{
+	background-color: white !important;
+	border: 2px solid darkgrey;
+}
+.is-hidden {
+    display: none;
+}
+
+.fullwidth,
+.is-selected {
+    background: wheat;
+}
+
+.screenshot{
+	width: 100%;
+	/* max-width: 700px; */
+}
+
+.thumbnail{
+	border: 1px solid lightgrey;
+	margin: 0 !important;
+	padding: 14px 0 !important;
+	background-color: white;
+}
+
+.title{
+	font-size: 28px;
+	line-height: 38px;
+}
+
+.release{
+	position: relative;
+	margin-bottom: 122px;
+}
+
+.expand-button{
+  position: absolute;
+  bottom: 0;
+  margin-bottom: 12px;
+}
+
+li.expanded.has-close {
+  position: relative;
+  padding-top: 60px;
+}
+
+.float-right {
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+
+hr{
+	stroke-width: 3;
+	stroke: darkgrey;
+	width: calc(100% - 48px);
+	margin: 0 24px;
+}
