@@ -21,8 +21,7 @@ const config = {
 			handleMissingId: 'warn',
 		},
 		paths: {
-			base,
-			relative: false,
+			base: '/apps/catalogue'
 		}
 	}
 };
