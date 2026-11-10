@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { matchesReleaseView, readReleaseView, releaseViewUrl } from '../src/lib/release-filter.js';
+import { catalogueFiltersUrl, matchesReleaseView, readCatalogueFilters, readReleaseView, releaseViewUrl } from '../src/lib/release-filter.js';
 
 const releases = [
   { doc_uri: '/older', series: 'GDP', latest: false },
@@ -60,4 +60,59 @@ test('latest toggles keep series context and returning to catalogue restores the
   const catalogueUrl = new URL(releaseViewUrl(latestUrl), current);
   assert.equal(catalogueUrl.search, '');
   assert.deepEqual(readReleaseView(catalogueUrl.searchParams), { series: '', showOnlyLatest: true });
+});
+
+const topicIds = ['economy', 'employmentandlabourmarket', 'peoplepopulationandcommunity'];
+
+test('reads complete default filters and normalizes known topics', () => {
+  assert.deepEqual(readCatalogueFilters(new URLSearchParams(), topicIds), {
+    series: '', showOnlyLatest: true, search: '', topicIds: [], from: '', to: ''
+  });
+  const params = new URLSearchParams('topic=unknown&topic=employmentandlabourmarket&topic=economy&topic=economy&q=++GDP++');
+  const filters = readCatalogueFilters(params, topicIds);
+  assert.deepEqual(filters.topicIds, topicIds.slice(0, 2));
+  assert.equal(filters.search, 'GDP');
+});
+
+test('round-trips combined filters without losing operators or special characters', () => {
+  const current = new URL('https://example.test/onsvj-catalogue/?other=value#results');
+  const filters = {
+    search: '"Pay & income" OR costs + prices', topicIds: topicIds.slice(0, 2),
+    from: '2024-02-29', to: '2025-01-31', series: 'Caf\u00e9 & costs + UK', showOnlyLatest: true
+  };
+  const target = new URL(catalogueFiltersUrl(current, filters, topicIds), current);
+  assert.equal(target.pathname, '/onsvj-catalogue/');
+  assert.equal(target.searchParams.get('other'), 'value');
+  assert.equal(target.hash, '');
+  assert.deepEqual(readCatalogueFilters(target.searchParams, topicIds), filters);
+  assert.equal(current.searchParams.has('q'), false);
+});
+
+test('rejects invalid URL date ranges as a whole and accepts inclusive single bounds', () => {
+  for (const query of ['from=2023-02-29', 'from=2024-01-01&to=bad', 'from=2025-01-02&to=2025-01-01', 'from=01/01/2025', 'from=0000-01-01']) {
+    const filters = readCatalogueFilters(new URLSearchParams(query), topicIds);
+    assert.equal(filters.from, '');
+    assert.equal(filters.to, '');
+  }
+  assert.equal(readCatalogueFilters(new URLSearchParams('from=2024-02-29'), topicIds).from, '2024-02-29');
+  assert.equal(readCatalogueFilters(new URLSearchParams('to=2025-01-01'), topicIds).to, '2025-01-01');
+});
+
+test('series and default destinations explicitly clear every other managed filter', () => {
+  const current = new URL('https://example.test/?q=GDP&topic=economy&from=2024-01-01&to=2025-01-01&latest=false&other=value');
+  const target = new URL(catalogueFiltersUrl(current, { series: 'GDP' }, topicIds), current);
+  assert.deepEqual(readCatalogueFilters(target.searchParams, topicIds), {
+    series: 'GDP', showOnlyLatest: false, search: '', topicIds: [], from: '', to: ''
+  });
+  const defaults = new URL(catalogueFiltersUrl(target, {}, topicIds), target);
+  assert.equal(defaults.search, '?other=value');
+});
+
+test('canonical URLs omit defaults, unknown topics and invalid dates', () => {
+  const current = new URL('https://example.test/');
+  const href = catalogueFiltersUrl(current, {
+    search: '   ', topicIds: ['unknown', 'economy', 'economy'], from: 'bad', to: '2025-01-01'
+  }, topicIds);
+  assert.equal(href, '/?topic=economy');
+  assert.equal(catalogueFiltersUrl(current, {}, topicIds), '/');
 });

@@ -1,12 +1,12 @@
 <script>
   import { Embed, Input, Button, Checkbox, Accordion, AccordionItem, Checkboxes, DocumentList, Details } from '@onsvisual/svelte-components';
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { browser } from '$app/environment';
-  import { goto } from '$app/navigation';
+  import { beforeNavigate, goto } from '$app/navigation';
   import { page } from '$app/stores';
   import * as d3 from 'd3';
   import { validateDateRange, matchesDateRange } from '$lib/date-filter.js';
-  import { matchesReleaseView, readReleaseView, releaseViewUrl } from '$lib/release-filter.js';
+  import { catalogueFiltersUrl, matchesReleaseView, readCatalogueFilters } from '$lib/release-filter.js';
 
   const topics = [
     { id: 'economy', label: 'Economy', checked: false },
@@ -14,6 +14,7 @@
     { id: 'peoplepopulationandcommunity', label: 'People, population and community', checked: false }
   ];
   const screenshotBase = 'https://raw.githubusercontent.com/ONSdigital/get-ons-vis-screenshots/main/screenshots/';
+  const knownTopicIds = topics.map(topic => topic.id);
 
   let data = $state([]);
   let editionCounts = $derived.by(() => {
@@ -27,42 +28,39 @@
   let mounted = $state(false);
   let loadError = $state(false);
   let searchInputText = $state('');
-  let searchString = $state('');
-  let selectedTopics = $state([]);
   let openAll = $state(false);
   let expandedRelease = $state(null);
   let showNumber = $state(18);
   let datefrom = $state('');
   let dateto = $state('');
   let dateTouched = $state({ from: false, to: false });
-  let appliedDateRange = $state({ from: '', to: '' });
   let dateRange = $derived(validateDateRange(datefrom, dateto));
-  let releaseView = $derived(browser ? readReleaseView($page.url.searchParams) : { series: '', showOnlyLatest: true });
-  let selectedSeries = $derived(releaseView.series);
-  let showOnlyLatest = $derived(releaseView.showOnlyLatest);
+  let filters = $derived(readCatalogueFilters(browser ? $page.url.searchParams : new URLSearchParams(), knownTopicIds));
+  let filterSignature = $derived(JSON.stringify(filters));
+  let selectedSeries = $derived(filters.series);
+  let showOnlyLatest = $derived(filters.showOnlyLatest);
+  let topicItems = $derived(topics.map(topic => ({ ...topic, checked: filters.topicIds.includes(topic.id) })));
+  let desiredFilters = null;
+  let navigationQueue = Promise.resolve();
+  let navigationVersion = 0;
 
   $effect(() => {
-    selectedSeries;
-    searchInputText = '';
-    searchString = '';
-    selectedTopics = [];
-    datefrom = '';
-    dateto = '';
-    appliedDateRange = { from: '', to: '' };
+    filterSignature;
+    const restored = untrack(() => filters);
+    searchInputText = restored.search;
+    datefrom = restored.from.split('-').reverse().join('/');
+    dateto = restored.to.split('-').reverse().join('/');
     dateTouched = { from: false, to: false };
-  });
-
-  $effect(() => {
-    selectedSeries;
-    showOnlyLatest;
     showNumber = 18;
     expandedRelease = null;
     openAll = false;
   });
 
-  $effect(() => {
-    if (dateRange.valid) {
-      appliedDateRange = { from: dateRange.from, to: dateRange.to };
+  beforeNavigate(({ type }) => {
+    if (type !== 'goto') {
+      navigationVersion += 1;
+      desiredFilters = null;
+      navigationQueue = Promise.resolve();
     }
   });
 
@@ -87,11 +85,11 @@
   let returnedReleases = $derived.by(() => {
     let matchedReleases = data;
 
-    if (searchString) {
+    if (filters.search) {
       const tokens = [];
       const regex = /"([^"]+)"|(\S+)/g;
       let match;
-      while ((match = regex.exec(searchString)) !== null) {
+      while ((match = regex.exec(filters.search)) !== null) {
         tokens.push(match[1] || match[2]);
       }
 
@@ -105,21 +103,45 @@
       }).sort((first, second) => new Date(second.release_date) - new Date(first.release_date));
     }
 
-    if (selectedTopics.length) {
-      const topicIds = selectedTopics.map(topic => topic.id);
-      matchedReleases = matchedReleases.filter(release => topicIds.includes(release.theme));
+    if (filters.topicIds.length) {
+      matchedReleases = matchedReleases.filter(release => filters.topicIds.includes(release.theme));
     }
 
     return matchedReleases.filter(release =>
-      matchesReleaseView(release, releaseView) && matchesDateRange(release.release_date, appliedDateRange)
+      matchesReleaseView(release, filters) && matchesDateRange(release.release_date, filters)
     );
   });
 
-  function setLatestOnly(checked) {
-    return goto(releaseViewUrl($page.url, { series: selectedSeries, showOnlyLatest: checked }), {
-      keepFocus: true,
-      noScroll: true
+  function commitFilters(patch) {
+    const current = desiredFilters || filters;
+    const href = catalogueFiltersUrl($page.url, { ...current, ...patch }, knownTopicIds);
+    const next = readCatalogueFilters(new URL(href, $page.url).searchParams, knownTopicIds);
+    if (JSON.stringify(next) === JSON.stringify(current)) return;
+
+    desiredFilters = next;
+    const version = navigationVersion;
+    navigationQueue = navigationQueue.catch(() => {}).then(async () => {
+      if (version !== navigationVersion) return;
+      try {
+        await goto(href, { keepFocus: true, noScroll: true });
+      } finally {
+        if (desiredFilters === next) desiredFilters = null;
+      }
     });
+    return navigationQueue;
+  }
+
+  function setTopic(item) {
+    const selectedIds = new Set((desiredFilters || filters).topicIds);
+    if (item.checked) selectedIds.add(item.id);
+    else selectedIds.delete(item.id);
+    return commitFilters({ topicIds: [...selectedIds] });
+  }
+
+  function applyDates(field, event) {
+    if (event.currentTarget.contains(event.relatedTarget)) return;
+    dateTouched[field] = true;
+    if (dateRange.valid) return commitFilters({ from: dateRange.from, to: dateRange.to });
   }
 
   function screenshotUrl(url) {
@@ -155,7 +177,7 @@
     {:else if loadError}
       <p role="alert">Releases could not be loaded. Please refresh the page to try again.</p>
     {:else}
-      <form class="catalogue-search" role="search" onsubmit={event => { event.preventDefault(); searchString = searchInputText; }}>
+      <form class="catalogue-search" role="search" onsubmit={event => { event.preventDefault(); commitFilters({ search: searchInputText }); }}>
         <Input id="release-search" label="Search release titles" bind:value={searchInputText} />
         <Button type="submit" icon="search">Search</Button>
       </form>
@@ -167,13 +189,13 @@
               id="latest-only"
               label="Show only latest edition"
               item={{ id: 'latest-only', label: 'Show only latest edition', checked: showOnlyLatest }}
-              on:change={event => setLatestOnly(event.detail.item.checked)}
+              on:change={event => commitFilters({ showOnlyLatest: event.detail.item.checked })}
             />
             <div class="catalogue-topics">
-              <Checkboxes items={topics} bind:value={selectedTopics} title="Topics" />
+              <Checkboxes items={topicItems} title="Topics" on:change={event => setTopic(event.detail.item)} />
             </div>
             <div class="catalogue-dates">
-              <div onfocusout={() => dateTouched.from = true}>
+              <div onfocusout={event => applyDates('from', event)}>
                 <Input
                   id="datefrom"
                   label="Date from"
@@ -182,7 +204,7 @@
                   bind:value={datefrom}
                 />
               </div>
-              <div onfocusout={() => dateTouched.to = true}>
+              <div onfocusout={event => applyDates('to', event)}>
                 <Input
                   id="dateto"
                   label="Date to"
@@ -200,7 +222,7 @@
         {#if selectedSeries}
           <div class="catalogue-series-context">
             <h2 class="ons-u-fs-m">{selectedSeries}</h2>
-            <p><a href={releaseViewUrl($page.url)}>Back to latest releases</a></p>
+            <p><a href={catalogueFiltersUrl($page.url, {}, knownTopicIds)}>Back to latest releases</a></p>
           </div>
         {/if}
         <div class="catalogue-results-toolbar">
@@ -239,7 +261,7 @@
                     </p>
                     {#if release.series?.trim() && release.series !== selectedSeries}
                       <p class="catalogue-series-link">
-                        <a href={releaseViewUrl($page.url, { series: release.series })} aria-label={`View all editions of ${release.series} (${editionCounts.get(release.series)})`}>View all editions ({editionCounts.get(release.series)})</a>
+                        <a href={catalogueFiltersUrl($page.url, { series: release.series }, knownTopicIds)} aria-label={`View all editions of ${release.series} (${editionCounts.get(release.series)})`}>View all editions ({editionCounts.get(release.series)})</a>
                       </p>
                     {/if}
                   </div>
