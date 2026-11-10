@@ -1,133 +1,200 @@
-/* Use this file for app specific CSS and overrides */
-body{
+.catalogue {
+	--catalogue-border: var(--ons-color-grey-35, #bcbcbd);
+	width: 100%;
 	max-width: 1080px;
+	box-sizing: border-box;
+	margin: 0 auto;
+	padding: 32px 24px 48px;
+	letter-spacing: 0;
 }
 
-.placeholder {
-	background: var(--ons-color-grey-10);
-	padding: 12px;
-	height: 300px;
-    width: 100%;
+.catalogue h1 {
+	margin: 0 0 32px;
+}
+
+.catalogue-search {
+	display: flex;
+	align-items: flex-end;
+	gap: 12px;
+	max-width: 720px;
+	margin-bottom: 24px;
+}
+
+.catalogue-search > .ons-field {
+	flex: 1;
+	min-width: 0;
+}
+
+.catalogue-search .ons-input {
+	width: 100%;
+	box-sizing: border-box;
+}
+
+.catalogue-search .ons-btn {
+	flex-shrink: 0;
+	margin: 0;
+}
+
+.catalogue-filters {
+	margin-bottom: 32px;
+}
+
+.catalogue-topics {
+	margin: 8px 0 24px;
+}
+
+.catalogue-dates {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 280px));
+	align-items: start;
+	gap: 24px;
+	margin: 0 0 16px;
+}
+
+.catalogue-dates .ons-input {
+	width: 100%;
+	box-sizing: border-box;
+}
+
+.catalogue-results-toolbar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	gap: 16px 24px;
+	margin-bottom: 24px;
+}
+
+.catalogue-results-toolbar h2 {
+	margin: 0;
+}
+
+.catalogue-result-count {
+	margin: 4px 0 0;
+}
+
+.catalogue-results {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.catalogue-release {
+	padding: 24px 0;
+	border-top: 1px solid var(--catalogue-border);
+}
+
+.catalogue-release:last-child {
+	border-bottom: 1px solid var(--catalogue-border);
+}
+
+.catalogue-release-summary {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 160px;
+	align-items: start;
+	gap: 24px;
+}
+
+.catalogue-release-content {
+	min-width: 0;
+}
+
+.catalogue-release-title {
+	margin: 0 0 12px;
+	overflow-wrap: anywhere;
+}
+
+.catalogue-release-topic {
+	margin: 0 0 8px;
+}
+
+.catalogue-release-meta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px 24px;
+	margin: 0;
+}
+
+.catalogue-preview {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 160px;
+	aspect-ratio: 4 / 3;
+	border: 1px solid var(--catalogue-border);
+	box-sizing: border-box;
+	background: white;
+}
+
+.catalogue-preview img {
+	display: block;
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+}
+
+.catalogue-release-details {
+	margin: 16px 0 0;
+}
+
+.catalogue-release-details .ons-details__content {
+	margin-top: 16px;
+}
+
+.catalogue-chart + .catalogue-chart {
+	margin-top: 24px;
+	padding-top: 24px;
+	border-top: 1px solid var(--catalogue-border);
+}
+
+.catalogue-chart h4 {
+	margin: 0 0 16px;
+}
+
+.catalogue-chart-image {
+	display: block;
+	width: 100%;
+	max-width: 800px;
+	height: auto;
+}
+
+.catalogue-chart-link {
+	display: block;
+	margin-top: 12px;
+}
+
+.catalogue-load-more {
+	margin-top: 24px;
+}
+
+.catalogue img[hidden] {
+	display: none;
+}
+
+@media (max-width: 600px) {
+	.catalogue {
+		padding: 24px 16px 40px;
 	}
 
-.search-container{
-	display: flex;
-	flex-direction: row;
-	max-width: 700px;
-	margin: 8px 6px 0px 24px;
-}
+	.catalogue-search {
+		flex-wrap: wrap;
+	}
 
-.options{
-	/* display: flex;
-	flex-direction: row; */
-	max-width: 700px;
-	margin: 8px 6px 24px 24px;
-}
+	.catalogue-search > .ons-field {
+		flex-basis: 100%;
+	}
 
-/* .grid-cell{
-	background: #ECECEC;
-	box-shadow: 3px 3px #A09FA0;
-	padding: 12px;
-	height: 100%;
-} */
+	.catalogue-dates {
+		grid-template-columns: minmax(0, 1fr);
+		gap: 16px;
+	}
 
-.bold{
-	font-weight: 600;
-}
+	.catalogue-release-summary {
+		grid-template-columns: minmax(0, 1fr);
+		gap: 16px;
+	}
 
-
-ul[class] {
-    margin: 0;
-    padding: 0;
-}
-
-ul[class] li {
-    list-style: none;
-}
-
-ul[class] li > * {
-    margin: 1rem;
-}
-
-/* [1] 'auto-fit' grid columns, so no media queries required. */
-/* [2] 'dense' packing fills in holes earlier in the grid. */
-.grid {
-    display: grid;
-    gap: 1rem;
-    grid-auto-flow: dense; /* [2] */
-    grid-template-columns: repeat(auto-fit, 20rem); /* [1] */
-}
-
-.grid > * {
-    align-items: flex-start;
-	background: #ECECEC;
-	box-shadow: 3px 3px #A09FA0;
-	padding: 12px;
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-}
-
-/* [3] Make fullwidth card span all grid columns. */
-.fullwidth {
-    grid-column: 1 / -1;
-}
-
-.expanded{
-	background-color: white !important;
-	border: 2px solid darkgrey;
-}
-.is-hidden {
-    display: none;
-}
-
-.fullwidth,
-.is-selected {
-    background: wheat;
-}
-
-.screenshot{
-	width: 100%;
-	/* max-width: 700px; */
-}
-
-.thumbnail{
-	border: 1px solid lightgrey;
-	margin: 0 !important;
-	padding: 14px 0 !important;
-	background-color: white;
-}
-
-.title{
-	font-size: 28px;
-	line-height: 38px;
-}
-
-.release{
-	position: relative;
-	margin-bottom: 122px;
-}
-
-.expand-button{
-  position: absolute;
-  bottom: 0;
-  margin-bottom: 12px;
-}
-
-li.expanded.has-close {
-  position: relative;
-  padding-top: 60px;
-}
-
-.float-right {
-  position: absolute;
-  top: 0;
-  right: 0;
-}
-
-hr{
-	stroke-width: 3;
-	stroke: darkgrey;
-	width: calc(100% - 48px);
-	margin: 0 24px;
+	.catalogue-preview {
+		width: 128px;
+	}
 }
