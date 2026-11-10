@@ -108,6 +108,28 @@
 	margin: 0 0 8px;
 }
 
+.catalogue-release-edition {
+	margin: 0 0 8px;
+	overflow-wrap: anywhere;
+}
+
+.catalogue-series-link {
+	margin: 12px 0 0;
+}
+
+.catalogue-series-context {
+	margin-bottom: 24px;
+	overflow-wrap: anywhere;
+}
+
+.catalogue-series-context h2 {
+	margin: 0 0 8px;
+}
+
+.catalogue-series-context p {
+	margin: 0;
+}
+
 .catalogue-release-meta {
 	display: flex;
 	flex-wrap: wrap;

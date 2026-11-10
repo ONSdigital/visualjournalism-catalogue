@@ -1,8 +1,12 @@
 <script>
   import { Embed, Input, Button, Checkbox, Accordion, AccordionItem, Checkboxes, DocumentList, Details } from '@onsvisual/svelte-components';
   import { onMount } from 'svelte';
+  import { browser } from '$app/environment';
+  import { goto } from '$app/navigation';
+  import { page } from '$app/stores';
   import * as d3 from 'd3';
   import { validateDateRange, matchesDateRange } from '$lib/date-filter.js';
+  import { matchesReleaseView, readReleaseView, releaseViewUrl } from '$lib/release-filter.js';
 
   const topics = [
     { id: 'economy', label: 'Economy', checked: false },
@@ -12,6 +16,13 @@
   const screenshotBase = 'https://raw.githubusercontent.com/ONSdigital/get-ons-vis-screenshots/main/screenshots/';
 
   let data = $state([]);
+  let editionCounts = $derived.by(() => {
+    const counts = new Map();
+    for (const release of data) {
+      counts.set(release.series, (counts.get(release.series) || 0) + 1);
+    }
+    return counts;
+  });
   let screenshots = $state({});
   let mounted = $state(false);
   let loadError = $state(false);
@@ -26,6 +37,28 @@
   let dateTouched = $state({ from: false, to: false });
   let appliedDateRange = $state({ from: '', to: '' });
   let dateRange = $derived(validateDateRange(datefrom, dateto));
+  let releaseView = $derived(browser ? readReleaseView($page.url.searchParams) : { series: '', showOnlyLatest: true });
+  let selectedSeries = $derived(releaseView.series);
+  let showOnlyLatest = $derived(releaseView.showOnlyLatest);
+
+  $effect(() => {
+    selectedSeries;
+    searchInputText = '';
+    searchString = '';
+    selectedTopics = [];
+    datefrom = '';
+    dateto = '';
+    appliedDateRange = { from: '', to: '' };
+    dateTouched = { from: false, to: false };
+  });
+
+  $effect(() => {
+    selectedSeries;
+    showOnlyLatest;
+    showNumber = 18;
+    expandedRelease = null;
+    openAll = false;
+  });
 
   $effect(() => {
     if (dateRange.valid) {
@@ -38,6 +71,9 @@
       const res = await fetch('https://raw.githubusercontent.com/ONSdigital/onsvisualjournalism-backend/main/data.json');
       if (!res.ok) throw new Error('Unable to load releases');
       data = await res.json();
+      if (data.length && !data.some(release => typeof release.latest === 'boolean')) {
+        throw new Error('Release data is missing latest-edition tags');
+      }
 
       const res2 = await fetch('https://raw.githubusercontent.com/ONSdigital/get-ons-vis-screenshots/main/screenshot-filenames.json');
       if (res2.ok) screenshots = await res2.json();
@@ -74,8 +110,17 @@
       matchedReleases = matchedReleases.filter(release => topicIds.includes(release.theme));
     }
 
-    return matchedReleases.filter(release => matchesDateRange(release.release_date, appliedDateRange));
+    return matchedReleases.filter(release =>
+      matchesReleaseView(release, releaseView) && matchesDateRange(release.release_date, appliedDateRange)
+    );
   });
+
+  function setLatestOnly(checked) {
+    return goto(releaseViewUrl($page.url, { series: selectedSeries, showOnlyLatest: checked }), {
+      keepFocus: true,
+      noScroll: true
+    });
+  }
 
   function screenshotUrl(url) {
     const filename = screenshots[url];
@@ -118,6 +163,12 @@
       <div class="catalogue-filters">
         <Accordion>
           <AccordionItem title="Filter releases">
+            <Checkbox
+              id="latest-only"
+              label="Show only latest edition"
+              item={{ id: 'latest-only', label: 'Show only latest edition', checked: showOnlyLatest }}
+              on:change={event => setLatestOnly(event.detail.item.checked)}
+            />
             <div class="catalogue-topics">
               <Checkboxes items={topics} bind:value={selectedTopics} title="Topics" />
             </div>
@@ -146,6 +197,12 @@
       </div>
 
       <section aria-labelledby="results-heading">
+        {#if selectedSeries}
+          <div class="catalogue-series-context">
+            <h2 class="ons-u-fs-m">{selectedSeries}</h2>
+            <p><a href={releaseViewUrl($page.url)}>Back to latest releases</a></p>
+          </div>
+        {/if}
         <div class="catalogue-results-toolbar">
           <div>
             <h2 id="results-heading" class="ons-u-fs-l" aria-live="polite" aria-atomic="true">
@@ -161,7 +218,7 @@
         </div>
 
         {#if !returnedReleases.length}
-          <p>No releases match your search and filters.</p>
+          <p>{selectedSeries ? 'No editions in this series match your search and filters.' : 'No releases match your search and filters.'}</p>
         {:else}
           <DocumentList cls="catalogue-results">
             {#each returnedReleases.slice(0, showNumber) as release (release)}
@@ -175,10 +232,16 @@
                       <a href={release.doc_uri} target="_blank" rel="noopener noreferrer">{release.title}</a>
                     </h3>
                     {#if topic}<p class="catalogue-release-topic">{topic.label}</p>{/if}
+                    <p class="catalogue-release-edition">{release.edition?.trim() ? `Edition: ${release.edition}` : 'Edition not available'}</p>
                     <p class="catalogue-release-meta">
                       Release date: {d3.timeFormat('%d/%m/%Y')(new Date(release.release_date))}
                       <span class="catalogue-chart-count">{charts.length} {charts.length === 1 ? 'chart' : 'charts'}</span>
                     </p>
+                    {#if release.series?.trim() && release.series !== selectedSeries}
+                      <p class="catalogue-series-link">
+                        <a href={releaseViewUrl($page.url, { series: release.series })} aria-label={`View all editions of ${release.series} (${editionCounts.get(release.series)})`}>View all editions ({editionCounts.get(release.series)})</a>
+                      </p>
+                    {/if}
                   </div>
                   {#if preview}
                     <a class="catalogue-preview" href={release.doc_uri} target="_blank" rel="noopener noreferrer" tabindex="-1" aria-hidden="true">
