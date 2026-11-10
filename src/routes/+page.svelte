@@ -37,7 +37,6 @@
   let dateRange = $derived(validateDateRange(datefrom, dateto));
   let filters = $derived(readCatalogueFilters(browser ? $page.url.searchParams : new URLSearchParams(), knownTopicIds));
   let filterSignature = $derived(JSON.stringify(filters));
-  let selectedSeries = $derived(filters.series);
   let showOnlyLatest = $derived(filters.showOnlyLatest);
   let topicItems = $derived(topics.map(topic => ({ ...topic, checked: filters.topicIds.includes(topic.id) })));
   let desiredFilters = null;
@@ -219,12 +218,6 @@
       </div>
 
       <section aria-labelledby="results-heading">
-        {#if selectedSeries}
-          <div class="catalogue-series-context">
-            <h2 class="ons-u-fs-m">{selectedSeries}</h2>
-            <p><a href={catalogueFiltersUrl($page.url, {}, knownTopicIds)}>Back to latest releases</a></p>
-          </div>
-        {/if}
         <div class="catalogue-results-toolbar">
           <div>
             <h2 id="results-heading" class="ons-u-fs-l" aria-live="polite" aria-atomic="true">
@@ -240,7 +233,7 @@
         </div>
 
         {#if !returnedReleases.length}
-          <p>{selectedSeries ? 'No editions in this series match your search and filters.' : 'No releases match your search and filters.'}</p>
+          <p>No releases match your search and filters.</p>
         {:else}
           <DocumentList cls="catalogue-results">
             {#each returnedReleases.slice(0, showNumber) as release (release)}
@@ -259,9 +252,9 @@
                       Release date: {d3.timeFormat('%d/%m/%Y')(new Date(release.release_date))}
                       <span class="catalogue-chart-count">{charts.length} {charts.length === 1 ? 'chart' : 'charts'}</span>
                     </p>
-                    {#if release.series?.trim() && release.series !== selectedSeries}
+                    {#if release.series?.trim()}
                       <p class="catalogue-series-link">
-                        <a href={catalogueFiltersUrl($page.url, { series: release.series }, knownTopicIds)} aria-label={`View all editions of ${release.series} (${editionCounts.get(release.series)})`}>View all editions ({editionCounts.get(release.series)})</a>
+                        <a href={catalogueFiltersUrl($page.url, { search: release.series, showOnlyLatest: false }, knownTopicIds)} aria-label={`View all editions of ${release.series} (${editionCounts.get(release.series)})`}>View all editions ({editionCounts.get(release.series)})</a>
                       </p>
                     {/if}
                   </div>

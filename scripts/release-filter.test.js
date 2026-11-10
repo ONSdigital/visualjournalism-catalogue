@@ -116,3 +116,20 @@ test('canonical URLs omit defaults, unknown topics and invalid dates', () => {
   assert.equal(href, '/?topic=economy');
   assert.equal(catalogueFiltersUrl(current, {}, topicIds), '/');
 });
+
+test('all-editions search uses the series title and clears other filters', () => {
+  const current = new URL('https://example.test/onsvj-catalogue/?series=Old&q=previous&topic=economy&from=2024-01-01&to=2025-01-01&latest=true&other=value');
+  const series = 'Pay & income + costs: UK';
+  const target = new URL(catalogueFiltersUrl(current, {
+    search: series, showOnlyLatest: false
+  }, topicIds), current);
+
+  assert.deepEqual(readCatalogueFilters(target.searchParams, topicIds), {
+    series: '', search: series, showOnlyLatest: false, topicIds: [], from: '', to: ''
+  });
+  assert.equal(target.searchParams.has('series'), false);
+  assert.equal(target.searchParams.get('q'), series);
+  assert.equal(target.searchParams.get('latest'), 'false');
+  assert.equal(target.searchParams.get('other'), 'value');
+  assert.equal(target.pathname, '/onsvj-catalogue/');
+});
