@@ -43,6 +43,37 @@ To build the preview version of the app, which uses the alternate **base_preview
 npm run build:preview
 ```
 
+## Automatic GitHub Pages deployment
+
+The [Pages workflow](.github/workflows/pages.yml) runs on every push to `main` and can also be started manually from the Actions tab. Changes on other branches are published after they are merged into `main`.
+
+### One-time repository setup
+
+1. Open **Settings > Pages > Build and deployment**.
+2. Set **Source** to **GitHub Actions**.
+3. Ensure organisation policies allow the workflow's Actions and GitHub Pages deployment. If the `github-pages` environment has deployment branch restrictions, allow `main`.
+4. Commit and push the workflow and configuration changes to `main`, or run **Deploy catalogue to GitHub Pages** manually after the workflow is on `main`.
+
+The standard project-site address is https://onsdigital.github.io/visualjournalism-catalogue/. The successful deployment also reports the configured site URL in GitHub Actions. A custom domain may change this address.
+
+### Build and deployment
+
+The workflow installs the committed lockfile with `npm ci`, runs the date/release/taxonomy tests, and uploads the generated `build/` directory. Deployment only runs after a successful build. It uses GitHub's built-in authentication; no personal access token or separate publishing branch is required. Generated files do not need to be committed.
+
+The Pages build sets `PUBLIC_APP_ENV=pages` to keep the homepage prerendered and takes `PUBLIC_BASE_PATH` from GitHub Pages configuration. For the standard project site this is `/visualjournalism-catalogue`. The optional override in `svelte.config.js` leaves existing local, production and preview defaults unchanged when unset.
+
+To check the same build locally in PowerShell:
+
+```powershell
+$env:PUBLIC_APP_ENV = 'pages'
+$env:PUBLIC_BASE_PATH = '/visualjournalism-catalogue'
+npm run build
+Remove-Item Env:PUBLIC_APP_ENV
+Remove-Item Env:PUBLIC_BASE_PATH
+```
+
+After the first deployment, check JavaScript/CSS loading, filtered URLs and refreshes, browser Back/Forward, and the title and Clear all filters links under the repository subdirectory. Query-string filtering uses the same static homepage and does not require an SPA fallback. Release data is fetched at runtime, so dataset updates do not require redeployment.
+
 ## Additional templates
 
 The following semi-automated journalism (AKA "robo-journalism") templates are also available:
