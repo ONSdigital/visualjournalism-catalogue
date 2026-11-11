@@ -43,6 +43,33 @@
 	margin: 8px 0 24px;
 }
 
+.catalogue-chart-types {
+	margin-bottom: 24px;
+}
+
+.catalogue-chart-type-options {
+	max-height: 320px;
+	overflow-y: auto;
+	margin-top: 16px;
+}
+
+.catalogue-chart-type-options .ons-checkboxes__items {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+	gap: 8px 24px;
+}
+
+.catalogue-chart-type-options label {
+	overflow-wrap: anywhere;
+}
+
+.catalogue-matching-count {
+	display: block;
+	font-size: 18px;
+	font-weight: 400;
+	margin-top: 4px;
+}
+
 .catalogue-dates {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 280px));

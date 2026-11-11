@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { catalogueFiltersUrl, matchesReleaseView, readCatalogueFilters, readReleaseView, releaseViewUrl } from '../src/lib/release-filter.js';
+import { catalogueFiltersUrl, chartTypeId, matchingCharts, matchesReleaseView, readCatalogueFilters, readReleaseView, releaseViewUrl } from '../src/lib/release-filter.js';
 
 const releases = [
   { doc_uri: '/older', series: 'GDP', latest: false },
@@ -66,7 +66,7 @@ const topicIds = ['economy', 'employmentandlabourmarket', 'peoplepopulationandco
 
 test('reads complete default filters and normalizes known topics', () => {
   assert.deepEqual(readCatalogueFilters(new URLSearchParams(), topicIds), {
-    series: '', showOnlyLatest: true, search: '', topicIds: [], from: '', to: ''
+    series: '', showOnlyLatest: true, search: '', topicIds: [], chartTypes: [], releaseUri: '', openAll: false, from: '', to: ''
   });
   const params = new URLSearchParams('topic=unknown&topic=employmentandlabourmarket&topic=economy&topic=economy&q=++GDP++');
   const filters = readCatalogueFilters(params, topicIds);
@@ -78,7 +78,8 @@ test('round-trips combined filters without losing operators or special character
   const current = new URL('https://example.test/onsvj-catalogue/?other=value#results');
   const filters = {
     search: '"Pay & income" OR costs + prices', topicIds: topicIds.slice(0, 2),
-    from: '2024-02-29', to: '2025-01-31', series: 'Caf\u00e9 & costs + UK', showOnlyLatest: true
+    from: '2024-02-29', to: '2025-01-31', series: 'Caf\u00e9 & costs + UK', showOnlyLatest: true,
+    chartTypes: ['bar-chart', 'line-chart'], releaseUri: '', openAll: false
   };
   const target = new URL(catalogueFiltersUrl(current, filters, topicIds), current);
   assert.equal(target.pathname, '/onsvj-catalogue/');
@@ -102,7 +103,7 @@ test('series and default destinations explicitly clear every other managed filte
   const current = new URL('https://example.test/?q=GDP&topic=economy&from=2024-01-01&to=2025-01-01&latest=false&other=value');
   const target = new URL(catalogueFiltersUrl(current, { series: 'GDP' }, topicIds), current);
   assert.deepEqual(readCatalogueFilters(target.searchParams, topicIds), {
-    series: 'GDP', showOnlyLatest: false, search: '', topicIds: [], from: '', to: ''
+    series: 'GDP', showOnlyLatest: false, search: '', topicIds: [], chartTypes: [], releaseUri: '', openAll: false, from: '', to: ''
   });
   const defaults = new URL(catalogueFiltersUrl(target, {}, topicIds), target);
   assert.equal(defaults.search, '?other=value');
@@ -125,11 +126,59 @@ test('all-editions search uses the series title and clears other filters', () =>
   }, topicIds), current);
 
   assert.deepEqual(readCatalogueFilters(target.searchParams, topicIds), {
-    series: '', search: series, showOnlyLatest: false, topicIds: [], from: '', to: ''
+    series: '', search: series, showOnlyLatest: false, topicIds: [], chartTypes: [], releaseUri: '', openAll: false, from: '', to: ''
   });
   assert.equal(target.searchParams.has('series'), false);
   assert.equal(target.searchParams.get('q'), series);
   assert.equal(target.searchParams.get('latest'), 'false');
   assert.equal(target.searchParams.get('other'), 'value');
   assert.equal(target.pathname, '/onsvj-catalogue/');
+});
+
+test('chart matching uses OR, preserves original positions and does not mutate releases', () => {
+  const release = { vis: [
+    { chart_type: 'line-chart' }, { chart_type: 'bar-chart' },
+    { chart_type: 'choropleth' }, { chart_type: null }, { chart_type: ' line-chart ' }
+  ] };
+  const original = structuredClone(release);
+  const matched = matchingCharts(release, ['line-chart', 'choropleth']);
+  assert.deepEqual(matched.map(item => item.index), [0, 2, 4]);
+  assert.equal(matched[0].chart, release.vis[0]);
+  assert.equal(matchingCharts(release).length, 5);
+  assert.equal(matchingCharts(release, ['unknown']).length, 0);
+  assert.deepEqual(matchingCharts(release, ['unclassified']).map(item => item.index), [3]);
+  assert.deepEqual(matchingCharts({}, ['line-chart']), []);
+  assert.equal(chartTypeId(' '), 'unclassified');
+  assert.equal(chartTypeId(undefined), 'unclassified');
+  assert.deepEqual(release, original);
+});
+
+test('normalizes chart-type URL selections without needing a loaded dataset', () => {
+  const filters = readCatalogueFilters(new URLSearchParams('chartType=line-chart&chartType=bar-chart&chartType=line-chart&chartType=++&openAll=invalid'));
+  assert.deepEqual(filters.chartTypes, ['bar-chart', 'line-chart']);
+  assert.equal(filters.openAll, false);
+  assert.equal(readCatalogueFilters(new URLSearchParams('openAll=true')).openAll, true);
+});
+
+test('exact-release links clear all filters and round-trip historical releases with expansion', () => {
+  const current = new URL('https://example.test/onsvj-catalogue/?q=GDP&series=GDP&topic=economy&chartType=bar-chart&from=2024-01-01&to=2025-01-01&other=value');
+  const releaseUri = 'https://www.ons.gov.uk/releases/example?edition=old&name=a+b#charts';
+  const target = new URL(catalogueFiltersUrl(current, {
+    releaseUri, showOnlyLatest: false, openAll: true
+  }, topicIds), current);
+  const filters = readCatalogueFilters(target.searchParams, topicIds);
+  assert.deepEqual(filters, {
+    series: '', showOnlyLatest: false, search: '', topicIds: [], chartTypes: [],
+    releaseUri, openAll: true, from: '', to: ''
+  });
+  assert.equal(target.searchParams.get('release'), releaseUri);
+  assert.equal(target.searchParams.get('other'), 'value');
+  assert.equal(target.pathname, '/onsvj-catalogue/');
+  assert.equal(matchesReleaseView({ doc_uri: releaseUri, latest: false }, filters), true);
+  assert.equal(matchesReleaseView({ doc_uri: releaseUri + '/other', latest: false }, filters), false);
+  assert.equal(matchesReleaseView({ doc_uri: releaseUri, latest: false }, { ...filters, showOnlyLatest: true }), false);
+  const allEditions = new URL(catalogueFiltersUrl(target, { search: 'GDP', showOnlyLatest: false }, topicIds), target);
+  assert.equal(allEditions.searchParams.has('release'), false);
+  assert.equal(allEditions.searchParams.has('openAll'), false);
+  assert.equal(allEditions.searchParams.has('chartType'), false);
 });

@@ -8,8 +8,18 @@ export function readReleaseView(params) {
   return { series, showOnlyLatest };
 }
 
-export function matchesReleaseView(release, { series = '', showOnlyLatest = true } = {}) {
-  return (!series || release.series === series) && (!showOnlyLatest || release.latest === true);
+export function matchesReleaseView(release, { series = '', releaseUri = '', showOnlyLatest = true } = {}) {
+  return (!series || release.series === series) && (!releaseUri || release.doc_uri === releaseUri)
+    && (!showOnlyLatest || release.latest === true);
+}
+
+export function chartTypeId(value) {
+  return typeof value === 'string' && value.trim() ? value.trim() : 'unclassified';
+}
+
+export function matchingCharts(release, chartTypes = []) {
+  return (release.vis || []).map((chart, index) => ({ chart, index }))
+    .filter(({ chart }) => !chartTypes.length || chartTypes.includes(chartTypeId(chart.chart_type)));
 }
 
 export function releaseViewUrl(currentUrl, { series = '', showOnlyLatest = !series } = {}) {
@@ -33,18 +43,27 @@ export function readCatalogueFilters(params, knownTopicIds = []) {
     ...readReleaseView(params),
     search: (params.get('q') || '').trim(),
     topicIds: knownTopicIds.filter(id => selectedIds.has(id)),
+    chartTypes: [...new Set(params.getAll('chartType').map(value => value.trim()).filter(Boolean))].sort(),
+    releaseUri: params.get('release')?.trim() ? params.get('release') : '',
+    openAll: params.get('openAll') === 'true',
     from: range.valid ? range.from : '',
     to: range.valid ? range.to : ''
   };
 }
 
 export function catalogueFiltersUrl(currentUrl, {
-  search = '', topicIds = [], from = '', to = '', series = '', showOnlyLatest = !series
+  search = '', topicIds = [], chartTypes = [], releaseUri = '', openAll = false,
+  from = '', to = '', series = '', showOnlyLatest = !series
 } = {}, knownTopicIds = []) {
   const url = new URL(releaseViewUrl(currentUrl, { series, showOnlyLatest }), currentUrl);
-  for (const key of ['q', 'topic', 'from', 'to']) url.searchParams.delete(key);
+  for (const key of ['q', 'topic', 'chartType', 'release', 'openAll', 'from', 'to']) url.searchParams.delete(key);
   if (search.trim()) url.searchParams.set('q', search.trim());
   for (const id of topicIds) url.searchParams.append('topic', id);
+  for (const id of [...new Set(chartTypes.map(value => value.trim()).filter(Boolean))].sort()) {
+    url.searchParams.append('chartType', id);
+  }
+  if (releaseUri.trim()) url.searchParams.set('release', releaseUri);
+  if (openAll) url.searchParams.set('openAll', 'true');
   if (from) url.searchParams.set('from', from);
   if (to) url.searchParams.set('to', to);
 
