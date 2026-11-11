@@ -1,5 +1,5 @@
 <script>
-  import { Embed, Input, Button, Checkbox, Checkboxes, DocumentList, Details, Icon } from '@onsvisual/svelte-components';
+  import { Embed, Header, Input, Button, Checkbox, Checkboxes, DocumentList, Details, Icon } from '@onsvisual/svelte-components';
   import { onMount, untrack } from 'svelte';
   import { browser } from '$app/environment';
   import { beforeNavigate, goto } from '$app/navigation';
@@ -209,13 +209,23 @@
 </script>
 
 <svelte:head>
-  <title>Visual journalism catalogue - ONS</title>
+  <title>ONS Data Visualisation Catalogue</title>
 </svelte:head>
 
-<Embed>
-  <main class="catalogue">
-    <h1 class="ons-u-fs-xl">Visual journalism catalogue</h1>
+<div class="catalogue-header">
+  <Header compact bilingual={false} skipHref="#main" />
+  <section class="catalogue-heading-band" aria-labelledby="catalogue-title">
+    <div class="catalogue-heading-inner">
+      <h1 id="catalogue-title" class="ons-u-fs-3xl">
+        <a class="catalogue-home" href={$page.url.pathname}>ONS Data Visualisation Catalogue</a>
+      </h1>
+      <p>Charts and interactive visualisations from Office for National Statistics releases.</p>
+    </div>
+  </section>
+</div>
 
+<Embed>
+  <main id="main" class="catalogue" aria-labelledby="catalogue-title" tabindex="-1">
     {#if !mounted}
       <p role="status">Loading releases...</p>
     {:else if loadError}
