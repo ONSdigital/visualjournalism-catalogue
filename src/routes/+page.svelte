@@ -324,7 +324,7 @@
               {@const release = result.release}
               {@const charts = result.charts}
               {@const totalCharts = (release.vis || []).length}
-              {@const theme = taxonomyLabel(release.theme)}
+              {@const topic = taxonomyLabel(release.topic)}
               <li class="catalogue-release">
                 <LazyContent>
                 <div class="catalogue-release-summary">
@@ -332,11 +332,9 @@
                     <h3 class="catalogue-release-title ons-u-fs-m">
                       <a href={release.doc_uri} target="_blank" rel="noopener noreferrer">{release.title}</a>
                     </h3>
-                    <p class="catalogue-release-topic">{theme}</p>
-                    <p class="catalogue-release-edition">{release.edition?.trim() ? `Edition: ${release.edition}` : 'Edition not available'}</p>
+                    <p class="catalogue-release-topic">{topic}</p>
                     <p class="catalogue-release-meta">
                       Release date: {d3.timeFormat('%d/%m/%Y')(new Date(release.release_date))}
-                      <span class="catalogue-chart-count">{#if filters.chartTypes.length}{charts.length} matching {charts.length === 1 ? 'chart' : 'charts'} of {totalCharts}{:else}{totalCharts} {totalCharts === 1 ? 'chart' : 'charts'}{/if}</span>
                     </p>
                     {#if release.series?.trim()}
                       <p class="catalogue-series-link">
