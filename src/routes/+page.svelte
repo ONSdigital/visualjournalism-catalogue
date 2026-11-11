@@ -28,18 +28,15 @@
   let searchInputText = $state('');
   let searchField = $state(null);
   let chartTypeSearch = $state('');
-  let expandedRelease = $state(null);
+  let openAll = $state(true);
+  let disclosureOverrides = $state(new Map());
   let showNumber = $state(18);
   let datefrom = $state('');
   let dateto = $state('');
   let dateTouched = $state({ from: false, to: false });
   let dateRange = $derived(validateDateRange(datefrom, dateto));
   let filters = $derived(readCatalogueFilters(browser ? $page.url.searchParams : new URLSearchParams(), knownThemeIds));
-  let filterSignature = $derived.by(() => {
-    const { openAll, ...matchingFilters } = filters;
-    return JSON.stringify(matchingFilters);
-  });
-  let openAll = $derived(filters.openAll);
+  let filterSignature = $derived(JSON.stringify(filters));
   let showOnlyLatest = $derived(filters.showOnlyLatest);
   let topicGroups = $derived(taxonomy.filter(node => taxonomyState(node, filters.taxonomy).selected > 0));
   let topicNodes = $derived(topicGroups.flatMap(node => node.children));
@@ -66,12 +63,8 @@
     dateto = restored.to.split('-').reverse().join('/');
     dateTouched = { from: false, to: false };
     showNumber = 18;
-    expandedRelease = null;
-  });
-
-  $effect(() => {
-    openAll;
-    expandedRelease = null;
+    disclosureOverrides = new Map();
+    if (restored.releaseUri) openAll = true;
   });
 
   beforeNavigate(({ type }) => {
@@ -127,12 +120,21 @@
       .filter(result => !filters.chartTypes.length || result.charts.length);
   });
   let matchingChartCount = $derived(releaseResults.reduce((count, result) => count + result.charts.length, 0));
+  let disclosureState = $derived.by(() => {
+    const expandable = releaseResults.filter(result => result.charts.length);
+    const opened = expandable.filter(result => isReleaseOpen(result.release)).length;
+    return {
+      checked: expandable.length > 0 && opened === expandable.length,
+      mixed: opened > 0 && opened < expandable.length,
+      available: expandable.length > 0
+    };
+  });
 
-  function commitFilters(patch, disclosureOnly = false) {
+  function commitFilters(patch) {
     const current = desiredFilters || filters;
     const href = catalogueFiltersUrl($page.url, {
       ...current,
-      ...(disclosureOnly ? {} : { releaseUri: '', openAll: false }),
+      releaseUri: '',
       ...patch
     }, knownThemeIds);
     const next = readCatalogueFilters(new URL(href, $page.url).searchParams, knownThemeIds);
@@ -181,19 +183,28 @@
     return commitFilters({ chartTypes: [...selectedIds] });
   }
 
+  function isReleaseOpen(release) {
+    return disclosureOverrides.get(release.doc_uri) ?? openAll;
+  }
+
+  function setOpenAll(checked) {
+    openAll = checked;
+    disclosureOverrides = new Map();
+  }
+
+  function syncDisclosureState(element, state) {
+    const input = element.querySelector('input');
+    input.indeterminate = state.mixed;
+    return { update(next) { input.indeterminate = next.mixed; } };
+  }
+
   function toggleRelease(release, event) {
     const isOpen = event.detail.e.target.open;
-    if (isOpen === (openAll || expandedRelease === release)) return;
-    if (openAll) {
-      if (!isOpen) {
-        expandedRelease = null;
-        commitFilters({ openAll: false }, true);
-      }
-      return;
-    }
-
-    if (isOpen) expandedRelease = release;
-    else if (expandedRelease === release) expandedRelease = null;
+    if (isOpen === isReleaseOpen(release)) return;
+    const next = new Map(disclosureOverrides);
+    if (isOpen === openAll) next.delete(release.doc_uri);
+    else next.set(release.doc_uri, isOpen);
+    disclosureOverrides = next;
   }
 </script>
 
@@ -298,8 +309,10 @@
               <p class="catalogue-result-count">Showing {Math.min(showNumber, releaseResults.length)} of {releaseResults.length}</p>
             {/if}
           </div>
-          {#if releaseResults.length}
-            <Checkbox id="open-all" label="Open all returned releases" item={{ id: 'open-all', label: 'Open all returned releases', checked: openAll }} on:change={event => commitFilters({ openAll: event.detail.item.checked }, true)} />
+          {#if disclosureState.available}
+            <div class="catalogue-disclosure-control" use:syncDisclosureState={disclosureState}>
+              <Checkbox id="open-all" label="Open all returned releases" item={{ id: 'open-all', label: 'Open all returned releases', checked: disclosureState.checked }} on:change={event => setOpenAll(event.detail.item.checked)} />
+            </div>
           {/if}
         </div>
 
@@ -332,7 +345,7 @@
                     {/if}
                     {#if charts.length < totalCharts}
                       <p class="catalogue-series-link">
-                        <a href={catalogueFiltersUrl($page.url, { releaseUri: release.doc_uri, showOnlyLatest: false, openAll: true }, knownThemeIds)}>See all charts in release</a>
+                        <a href={catalogueFiltersUrl($page.url, { releaseUri: release.doc_uri, showOnlyLatest: false }, knownThemeIds)}>See all charts in release</a>
                       </p>
                     {/if}
                   </div>
@@ -343,10 +356,10 @@
                     title={`View ${charts.length}${filters.chartTypes.length ? ' matching' : ''} ${charts.length === 1 ? 'chart' : 'charts'}`}
                     headingTag="h3"
                     cls="catalogue-release-details"
-                    open={openAll || expandedRelease === release}
+                    open={isReleaseOpen(release)}
                     on:toggle={event => toggleRelease(release, event)}
                   >
-                    {#if openAll || expandedRelease === release}
+                    {#if isReleaseOpen(release)}
                       {#each charts as { chart, index: chartIndex } (chartIndex)}
                         <div class="catalogue-chart">
                           <LazyContent initialHeight={400} label={`Loading chart ${chartIndex + 1}...`}>

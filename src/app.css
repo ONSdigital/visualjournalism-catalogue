@@ -205,6 +205,17 @@
 	margin: 0;
 }
 
+.catalogue-disclosure-control .ons-checkbox__input:indeterminate::after {
+	opacity: 1;
+	border: 0;
+	background: var(--ons-color-input-border);
+	height: 3px;
+	width: 12px;
+	top: 8px;
+	left: 3px;
+	transform: none;
+}
+
 .catalogue-result-count {
 	margin: 4px 0 0;
 }

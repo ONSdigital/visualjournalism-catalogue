@@ -67,7 +67,7 @@ const allTaxonomy = { mode: 'exclude', paths: [] };
 
 test('reads complete default filters and normalizes known topics', () => {
   assert.deepEqual(readCatalogueFilters(new URLSearchParams(), topicIds), {
-    series: '', showOnlyLatest: true, search: '', taxonomy: allTaxonomy, chartTypes: [], releaseUri: '', openAll: false, from: '', to: ''
+    series: '', showOnlyLatest: true, search: '', taxonomy: allTaxonomy, chartTypes: [], releaseUri: '', from: '', to: ''
   });
   const params = new URLSearchParams('topic=unknown&topic=employmentandlabourmarket&topic=economy&topic=economy&q=++GDP++');
   const filters = readCatalogueFilters(params, topicIds);
@@ -80,7 +80,7 @@ test('round-trips combined filters without losing operators or special character
   const filters = {
     search: '"Pay & income" OR costs + prices', taxonomy: { mode: 'include', paths: topicIds.slice(0, 2) },
     from: '2024-02-29', to: '2025-01-31', series: 'Caf\u00e9 & costs + UK', showOnlyLatest: true,
-    chartTypes: ['bar-chart', 'line-chart'], releaseUri: '', openAll: false
+    chartTypes: ['bar-chart', 'line-chart'], releaseUri: ''
   };
   const target = new URL(catalogueFiltersUrl(current, filters, topicIds), current);
   assert.equal(target.pathname, '/onsvj-catalogue/');
@@ -104,7 +104,7 @@ test('series and default destinations explicitly clear every other managed filte
   const current = new URL('https://example.test/?q=GDP&topic=economy&from=2024-01-01&to=2025-01-01&latest=false&other=value');
   const target = new URL(catalogueFiltersUrl(current, { series: 'GDP' }, topicIds), current);
   assert.deepEqual(readCatalogueFilters(target.searchParams, topicIds), {
-    series: 'GDP', showOnlyLatest: false, search: '', taxonomy: allTaxonomy, chartTypes: [], releaseUri: '', openAll: false, from: '', to: ''
+    series: 'GDP', showOnlyLatest: false, search: '', taxonomy: allTaxonomy, chartTypes: [], releaseUri: '', from: '', to: ''
   });
   const defaults = new URL(catalogueFiltersUrl(target, {}, topicIds), target);
   assert.equal(defaults.search, '?other=value');
@@ -127,7 +127,7 @@ test('all-editions search uses the series title and clears other filters', () =>
   }, topicIds), current);
 
   assert.deepEqual(readCatalogueFilters(target.searchParams, topicIds), {
-    series: '', search: series, showOnlyLatest: false, taxonomy: allTaxonomy, chartTypes: [], releaseUri: '', openAll: false, from: '', to: ''
+    series: '', search: series, showOnlyLatest: false, taxonomy: allTaxonomy, chartTypes: [], releaseUri: '', from: '', to: ''
   });
   assert.equal(target.searchParams.has('series'), false);
   assert.equal(target.searchParams.get('q'), series);
@@ -157,20 +157,19 @@ test('chart matching uses OR, preserves original positions and does not mutate r
 test('normalizes chart-type URL selections without needing a loaded dataset', () => {
   const filters = readCatalogueFilters(new URLSearchParams('chartType=line-chart&chartType=bar-chart&chartType=line-chart&chartType=++&openAll=invalid'));
   assert.deepEqual(filters.chartTypes, ['bar-chart', 'line-chart']);
-  assert.equal(filters.openAll, false);
-  assert.equal(readCatalogueFilters(new URLSearchParams('openAll=true')).openAll, true);
+  assert.equal(Object.hasOwn(filters, 'openAll'), false);
 });
 
-test('exact-release links clear all filters and round-trip historical releases with expansion', () => {
+test('exact-release links clear all filters and round-trip historical releases', () => {
   const current = new URL('https://example.test/onsvj-catalogue/?q=GDP&series=GDP&topic=economy&chartType=bar-chart&from=2024-01-01&to=2025-01-01&other=value');
   const releaseUri = 'https://www.ons.gov.uk/releases/example?edition=old&name=a+b#charts';
   const target = new URL(catalogueFiltersUrl(current, {
-    releaseUri, showOnlyLatest: false, openAll: true
+    releaseUri, showOnlyLatest: false
   }, topicIds), current);
   const filters = readCatalogueFilters(target.searchParams, topicIds);
   assert.deepEqual(filters, {
     series: '', showOnlyLatest: false, search: '', taxonomy: allTaxonomy, chartTypes: [],
-    releaseUri, openAll: true, from: '', to: ''
+    releaseUri, from: '', to: ''
   });
   assert.equal(target.searchParams.get('release'), releaseUri);
   assert.equal(target.searchParams.get('other'), 'value');
@@ -182,6 +181,19 @@ test('exact-release links clear all filters and round-trip historical releases w
   assert.equal(allEditions.searchParams.has('release'), false);
   assert.equal(allEditions.searchParams.has('openAll'), false);
   assert.equal(allEditions.searchParams.has('chartType'), false);
+});
+
+test('disclosure state is ignored and removed from generated URLs', () => {
+  for (const value of ['true', 'false', 'invalid']) {
+    const current = new URL(`https://example.test/catalogue/?q=GDP&openAll=${value}&other=value`);
+    const filters = readCatalogueFilters(current.searchParams);
+    assert.equal(Object.hasOwn(filters, 'openAll'), false);
+    const target = new URL(catalogueFiltersUrl(current, filters), current);
+    assert.equal(target.searchParams.has('openAll'), false);
+    assert.equal(target.searchParams.get('q'), 'GDP');
+    assert.equal(target.searchParams.get('other'), 'value');
+    assert.equal(new URL(releaseViewUrl(current), current).searchParams.has('openAll'), false);
+  }
 });
 
 test('taxonomy URLs preserve all, none, exceptions and legacy theme links', () => {

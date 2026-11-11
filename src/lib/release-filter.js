@@ -26,6 +26,7 @@ export function matchingCharts(release, chartTypes = []) {
 export function releaseViewUrl(currentUrl, { series = '', showOnlyLatest = !series } = {}) {
   const url = new URL(currentUrl);
   url.hash = '';
+  url.searchParams.delete('openAll');
   if (series) url.searchParams.set('series', series);
   else url.searchParams.delete('series');
   if (showOnlyLatest === !series) url.searchParams.delete('latest');
@@ -50,14 +51,13 @@ export function readCatalogueFilters(params, knownTopicIds = []) {
     taxonomy,
     chartTypes: [...new Set(params.getAll('chartType').map(value => value.trim()).filter(Boolean))].sort(),
     releaseUri: params.get('release')?.trim() ? params.get('release') : '',
-    openAll: params.get('openAll') === 'true',
     from: range.valid ? range.from : '',
     to: range.valid ? range.to : ''
   };
 }
 
 export function catalogueFiltersUrl(currentUrl, {
-  search = '', topicIds = [], chartTypes = [], releaseUri = '', openAll = false,
+  search = '', topicIds = [], chartTypes = [], releaseUri = '',
   from = '', to = '', series = '', showOnlyLatest = !series, taxonomy
 } = {}, knownTopicIds = []) {
   const url = new URL(releaseViewUrl(currentUrl, { series, showOnlyLatest }), currentUrl);
@@ -73,7 +73,6 @@ export function catalogueFiltersUrl(currentUrl, {
     url.searchParams.append('chartType', id);
   }
   if (releaseUri.trim()) url.searchParams.set('release', releaseUri);
-  if (openAll) url.searchParams.set('openAll', 'true');
   if (from) url.searchParams.set('from', from);
   if (to) url.searchParams.set('to', to);
 
