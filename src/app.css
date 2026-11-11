@@ -339,8 +339,9 @@
 	margin-top: 12px;
 }
 
-.catalogue-load-more {
+.catalogue-load-sentinel {
 	margin-top: 24px;
+	height: 1px;
 }
 
 @media (min-width: 1200px) {

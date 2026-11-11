@@ -13,6 +13,7 @@
   import { buildTaxonomy, matchesTaxonomy, taxonomyLabel, taxonomyState, toggleTaxonomy } from '$lib/taxonomy-filter.js';
 
   const knownThemeIds = ['businessindustryandtrade', 'economy', 'employmentandlabourmarket', 'peoplepopulationandcommunity'];
+  const releaseBatchSize = 10;
 
   let data = $state([]);
   let taxonomy = $derived(buildTaxonomy(data));
@@ -30,7 +31,7 @@
   let chartTypeSearch = $state('');
   let openAll = $state(true);
   let disclosureOverrides = $state(new Map());
-  let showNumber = $state(18);
+  let showNumber = $state(releaseBatchSize);
   let datefrom = $state('');
   let dateto = $state('');
   let dateTouched = $state({ from: false, to: false });
@@ -62,9 +63,15 @@
     datefrom = restored.from.split('-').reverse().join('/');
     dateto = restored.to.split('-').reverse().join('/');
     dateTouched = { from: false, to: false };
-    showNumber = 18;
+    showNumber = releaseBatchSize;
     disclosureOverrides = new Map();
     if (restored.releaseUri) openAll = true;
+    untrack(() => {
+      const heading = document.getElementById('results-heading');
+      if (heading && heading.getBoundingClientRect().top < 0) {
+        heading.scrollIntoView({ block: 'start', behavior: 'instant' });
+      }
+    });
   });
 
   beforeNavigate(({ type }) => {
@@ -168,7 +175,7 @@
     datefrom = '';
     dateto = '';
     dateTouched = { from: false, to: false };
-    showNumber = 18;
+    showNumber = releaseBatchSize;
   }
 
   function setTaxonomy(path, checked) {
@@ -193,6 +200,19 @@
     if (item.checked) selectedIds.add(item.id);
     else selectedIds.delete(item.id);
     return commitFilters({ chartTypes: [...selectedIds] });
+  }
+
+  function loadNextBatch(element) {
+    const signature = filterSignature;
+    const shown = showNumber;
+    const observer = new IntersectionObserver(entries => {
+      if (!entries.some(entry => entry.isIntersecting)) return;
+      observer.disconnect();
+      if (signature !== filterSignature || shown !== showNumber) return;
+      showNumber = Math.min(shown + releaseBatchSize, releaseResults.length);
+    }, { rootMargin: '0px 0px 400px 0px' });
+    observer.observe(element);
+    return { destroy() { observer.disconnect(); } };
   }
 
   function isReleaseOpen(release) {
@@ -328,9 +348,9 @@
                 <span class="catalogue-matching-count">containing {matchingChartCount} matching {matchingChartCount === 1 ? 'chart' : 'charts'}</span>
               {/if}
             </h2>
-            {#if releaseResults.length}
-              <p class="catalogue-result-count">Showing {Math.min(showNumber, releaseResults.length)} of {releaseResults.length}</p>
-            {/if}
+            <!-- {#if releaseResults.length}
+              <p class="catalogue-result-count" role="status" aria-atomic="true">Showing {Math.min(showNumber, releaseResults.length)} of {releaseResults.length}</p>
+            {/if} -->
           </div>
           {#if disclosureState.available}
             <div class="catalogue-disclosure-control" use:syncDisclosureState={disclosureState}>
@@ -397,11 +417,11 @@
             {/each}
           </DocumentList>
 
-          {#if showNumber < releaseResults.length}
-            <div class="catalogue-load-more">
-              <Button variant="secondary" on:click={() => showNumber += 18}>Load more</Button>
-            </div>
-          {/if}
+          {#key `${filterSignature}:${showNumber}`}
+            {#if showNumber < releaseResults.length}
+              <div class="catalogue-load-sentinel" use:loadNextBatch aria-hidden="true"></div>
+            {/if}
+          {/key}
         {/if}
       </section>
       </div>
