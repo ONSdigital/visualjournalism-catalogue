@@ -7,6 +7,7 @@
   import * as d3 from 'd3';
   import { validateDateRange, matchesDateRange } from '$lib/date-filter.js';
   import { catalogueFiltersUrl, chartTypeId, matchingCharts, matchesReleaseView, readCatalogueFilters } from '$lib/release-filter.js';
+  import LazyContent from '$lib/LazyContent.svelte';
 
   const topics = [
     { id: 'economy', label: 'Economy', checked: false },
@@ -288,6 +289,7 @@
               {@const preview = charts[0] && screenshotUrl(charts[0].chart.url)}
               {@const topic = topics.find(topic => topic.id === release.theme)}
               <li class="catalogue-release">
+                <LazyContent>
                 <div class="catalogue-release-summary">
                   <div class="catalogue-release-content">
                     <h3 class="catalogue-release-title ons-u-fs-m">
@@ -329,6 +331,7 @@
                       {#each charts as { chart, index: chartIndex }}
                         {@const image = screenshotUrl(chart.url)}
                         <div class="catalogue-chart">
+                          <LazyContent initialHeight={400} label={`Loading chart ${chartIndex + 1}...`}>
                           <h4 class="ons-u-fs-r--b">Chart {chartIndex + 1}{chart.chart_type ? `: ${chart.chart_type}` : ''}</h4>
                           <a href="https://www.ons.gov.uk/{chart.url}" target="_blank" rel="noopener noreferrer">
                             {#if image}
@@ -336,11 +339,13 @@
                             {/if}
                             <span class="catalogue-chart-link">View chart {chartIndex + 1} on the ONS website</span>
                           </a>
+                          </LazyContent>
                         </div>
                       {/each}
                     {/if}
                   </Details>
                 {/if}
+                </LazyContent>
               </li>
             {/each}
           </DocumentList>
