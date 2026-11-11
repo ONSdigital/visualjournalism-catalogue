@@ -1,5 +1,5 @@
 <script>
-  import { Embed, Input, Button, Checkbox, Accordion, AccordionItem, Checkboxes, DocumentList, Details } from '@onsvisual/svelte-components';
+  import { Embed, Input, Button, Checkbox, Checkboxes, DocumentList, Details } from '@onsvisual/svelte-components';
   import { onMount, untrack } from 'svelte';
   import { browser } from '$app/environment';
   import { beforeNavigate, goto } from '$app/navigation';
@@ -8,13 +8,13 @@
   import { validateDateRange, matchesDateRange } from '$lib/date-filter.js';
   import { catalogueFiltersUrl, chartTypeId, matchingCharts, matchesReleaseView, readCatalogueFilters } from '$lib/release-filter.js';
   import LazyContent from '$lib/LazyContent.svelte';
+  import ChartEmbed from '$lib/ChartEmbed.svelte';
 
   const topics = [
     { id: 'economy', label: 'Economy', checked: false },
     { id: 'employmentandlabourmarket', label: 'Employment and labour market', checked: false },
     { id: 'peoplepopulationandcommunity', label: 'People, population and community', checked: false }
   ];
-  const screenshotBase = 'https://raw.githubusercontent.com/ONSdigital/get-ons-vis-screenshots/main/screenshots/';
   const knownTopicIds = topics.map(topic => topic.id);
 
   let data = $state([]);
@@ -25,7 +25,6 @@
     }
     return counts;
   });
-  let screenshots = $state({});
   let mounted = $state(false);
   let loadError = $state(false);
   let searchInputText = $state('');
@@ -92,8 +91,6 @@
         throw new Error('Release data is missing latest-edition tags');
       }
 
-      const res2 = await fetch('https://raw.githubusercontent.com/ONSdigital/get-ons-vis-screenshots/main/screenshot-filenames.json');
-      if (res2.ok) screenshots = await res2.json();
     } catch {
       loadError = true;
     } finally {
@@ -176,11 +173,6 @@
     return commitFilters({ chartTypes: [...selectedIds] });
   }
 
-  function screenshotUrl(url) {
-    const filename = screenshots[url];
-    return filename ? `${screenshotBase}${filename}.png` : null;
-  }
-
   function toggleRelease(release, event) {
     const isOpen = event.detail.e.target.open;
     if (isOpen === (openAll || expandedRelease === release)) return;
@@ -210,32 +202,34 @@
     {:else if loadError}
       <p role="alert">Releases could not be loaded. Please refresh the page to try again.</p>
     {:else}
+      <div class="catalogue-layout">
+      <aside class="catalogue-sidebar" aria-label="Search and filter releases">
       <form class="catalogue-search" role="search" onsubmit={event => { event.preventDefault(); commitFilters({ search: searchInputText }); }}>
         <Input id="release-search" label="Search release titles" bind:value={searchInputText} />
         <Button type="submit" icon="search">Search</Button>
       </form>
 
       <div class="catalogue-filters">
-        <Accordion>
-          <AccordionItem title="Filter releases">
+        <h2 class="ons-u-fs-m">Filter releases</h2>
+        <Details title="Editions" headingTag="h3" cls="catalogue-filter">
             <Checkbox
               id="latest-only"
               label="Show only latest edition"
               item={{ id: 'latest-only', label: 'Show only latest edition', checked: showOnlyLatest }}
               on:change={event => commitFilters({ showOnlyLatest: event.detail.item.checked })}
             />
-            <div class="catalogue-topics">
-              <Checkboxes items={topicItems} title="Topics" on:change={event => setTopic(event.detail.item)} />
-            </div>
-            <div class="catalogue-chart-types">
-              <Details title={`Chart types${filters.chartTypes.length ? ` (${filters.chartTypes.length} selected)` : ''}`} headingTag="h3">
+        </Details>
+              <Details title={`Chart types${filters.chartTypes.length ? ` (${filters.chartTypes.length} selected)` : ''}`} headingTag="h3" cls="catalogue-filter">
                 <Input id="chart-type-search" label="Find a chart type" bind:value={chartTypeSearch} />
                 <div class="catalogue-chart-type-options">
                   <Checkboxes items={visibleChartTypeItems} title="Chart types" hideTitle on:change={event => setChartType(event.detail.item)} />
                 </div>
                 {#if !visibleChartTypeItems.length}<p>No chart types match.</p>{/if}
               </Details>
-            </div>
+        <Details title={`Topics${filters.topicIds.length ? ` (${filters.topicIds.length} selected)` : ''}`} headingTag="h3" cls="catalogue-filter">
+              <Checkboxes items={topicItems} title="Topics" hideTitle on:change={event => setTopic(event.detail.item)} />
+        </Details>
+        <Details title="Date range" headingTag="h3" cls="catalogue-filter">
             <div class="catalogue-dates">
               <div onfocusout={event => applyDates('from', event)}>
                 <Input
@@ -256,11 +250,11 @@
                 />
               </div>
             </div>
-          </AccordionItem>
-        </Accordion>
+        </Details>
       </div>
+      </aside>
 
-      <section aria-labelledby="results-heading">
+      <section class="catalogue-results-column" aria-labelledby="results-heading">
         <div class="catalogue-results-toolbar">
           <div>
             <h2 id="results-heading" class="ons-u-fs-l" aria-live="polite" aria-atomic="true">
@@ -286,7 +280,6 @@
               {@const release = result.release}
               {@const charts = result.charts}
               {@const totalCharts = (release.vis || []).length}
-              {@const preview = charts[0] && screenshotUrl(charts[0].chart.url)}
               {@const topic = topics.find(topic => topic.id === release.theme)}
               <li class="catalogue-release">
                 <LazyContent>
@@ -312,11 +305,6 @@
                       </p>
                     {/if}
                   </div>
-                  {#if preview}
-                    <a class="catalogue-preview" href={release.doc_uri} target="_blank" rel="noopener noreferrer" tabindex="-1" aria-hidden="true">
-                      <img src={preview} alt="" loading="lazy" onerror={event => event.currentTarget.hidden = true} />
-                    </a>
-                  {/if}
                 </div>
 
                 {#if charts.length}
@@ -328,17 +316,11 @@
                     on:toggle={event => toggleRelease(release, event)}
                   >
                     {#if openAll || expandedRelease === release}
-                      {#each charts as { chart, index: chartIndex }}
-                        {@const image = screenshotUrl(chart.url)}
+                      {#each charts as { chart, index: chartIndex } (chartIndex)}
                         <div class="catalogue-chart">
                           <LazyContent initialHeight={400} label={`Loading chart ${chartIndex + 1}...`}>
                           <h4 class="ons-u-fs-r--b">Chart {chartIndex + 1}{chart.chart_type ? `: ${chart.chart_type}` : ''}</h4>
-                          <a href="https://www.ons.gov.uk/{chart.url}" target="_blank" rel="noopener noreferrer">
-                            {#if image}
-                              <img class="catalogue-chart-image" src={image} alt={`Chart ${chartIndex + 1} from ${release.title}`} loading="lazy" onerror={event => event.currentTarget.hidden = true} />
-                            {/if}
-                            <span class="catalogue-chart-link">View chart {chartIndex + 1} on the ONS website</span>
-                          </a>
+                          <ChartEmbed url={chart.url} title={`Chart ${chartIndex + 1} from ${release.title}`} />
                           </LazyContent>
                         </div>
                       {/each}
@@ -357,6 +339,7 @@
           {/if}
         {/if}
       </section>
+      </div>
     {/if}
   </main>
 </Embed>
