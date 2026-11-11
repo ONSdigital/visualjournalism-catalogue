@@ -43,10 +43,6 @@
   let showOnlyLatest = $derived(filters.showOnlyLatest);
   let topicGroups = $derived(taxonomy.filter(node => taxonomyState(node, filters.taxonomy).selected > 0));
   let topicNodes = $derived(topicGroups.flatMap(node => node.children));
-  let subtopicGroups = $derived(topicGroups.flatMap(theme => theme.children
-    .filter(node => taxonomyState(node, filters.taxonomy).selected > 0)
-    .map(node => ({ ...node, parentLabel: theme.label }))));
-  let subtopicNodes = $derived(subtopicGroups.flatMap(node => node.children));
   let chartTypeItems = $derived.by(() => {
     const ids = new Set(filters.chartTypes);
     for (const release of data) {
@@ -253,20 +249,6 @@
               </fieldset>
             {:else}
               <p>No topics available for the selected themes.</p>
-            {/each}
-          </div>
-        </Details>
-        <Details title={`Subtopics ${taxonomySummary(subtopicNodes)}`} headingTag="h3" cls="catalogue-filter">
-          <div class="catalogue-taxonomy-options">
-            {#each subtopicGroups as group (group.path)}
-              <fieldset class="ons-fieldset catalogue-taxonomy-group">
-                <legend class="catalogue-taxonomy-legend">{group.parentLabel}: {group.label}</legend>
-                {#each group.children as node (node.path)}
-                  <TaxonomyCheckbox {node} selection={filters.taxonomy} onchange={setTaxonomy} />
-                {/each}
-              </fieldset>
-            {:else}
-              <p>No subtopics available for the selected topics.</p>
             {/each}
           </div>
         </Details>
