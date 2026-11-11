@@ -1,4 +1,5 @@
 import { validateDateRange } from './date-filter.js';
+import { normalizeTaxonomy } from './taxonomy-filter.js';
 
 export function readReleaseView(params) {
   const value = params.get('series');
@@ -39,10 +40,14 @@ export function readCatalogueFilters(params, knownTopicIds = []) {
   };
   const range = validateDateRange(dateInput(params.get('from')), dateInput(params.get('to')));
   const selectedIds = new Set(params.getAll('topic'));
+  const legacyThemes = knownTopicIds.filter(id => selectedIds.has(id));
+  const taxonomy = params.has('tax') || params.has('taxMode')
+    ? normalizeTaxonomy({ mode: params.get('taxMode'), paths: params.getAll('tax') })
+    : normalizeTaxonomy({ mode: legacyThemes.length ? 'include' : 'exclude', paths: legacyThemes });
   return {
     ...readReleaseView(params),
     search: (params.get('q') || '').trim(),
-    topicIds: knownTopicIds.filter(id => selectedIds.has(id)),
+    taxonomy,
     chartTypes: [...new Set(params.getAll('chartType').map(value => value.trim()).filter(Boolean))].sort(),
     releaseUri: params.get('release')?.trim() ? params.get('release') : '',
     openAll: params.get('openAll') === 'true',
@@ -53,12 +58,17 @@ export function readCatalogueFilters(params, knownTopicIds = []) {
 
 export function catalogueFiltersUrl(currentUrl, {
   search = '', topicIds = [], chartTypes = [], releaseUri = '', openAll = false,
-  from = '', to = '', series = '', showOnlyLatest = !series
+  from = '', to = '', series = '', showOnlyLatest = !series, taxonomy
 } = {}, knownTopicIds = []) {
   const url = new URL(releaseViewUrl(currentUrl, { series, showOnlyLatest }), currentUrl);
-  for (const key of ['q', 'topic', 'chartType', 'release', 'openAll', 'from', 'to']) url.searchParams.delete(key);
+  for (const key of ['q', 'topic', 'tax', 'taxMode', 'chartType', 'release', 'openAll', 'from', 'to']) url.searchParams.delete(key);
   if (search.trim()) url.searchParams.set('q', search.trim());
-  for (const id of topicIds) url.searchParams.append('topic', id);
+  const legacyThemes = knownTopicIds.filter(id => topicIds.includes(id));
+  const selection = normalizeTaxonomy(taxonomy || {
+    mode: legacyThemes.length ? 'include' : 'exclude', paths: legacyThemes
+  });
+  if (selection.mode === 'include') url.searchParams.set('taxMode', 'include');
+  for (const path of selection.paths) url.searchParams.append('tax', path);
   for (const id of [...new Set(chartTypes.map(value => value.trim()).filter(Boolean))].sort()) {
     url.searchParams.append('chartType', id);
   }
@@ -68,8 +78,6 @@ export function catalogueFiltersUrl(currentUrl, {
   if (to) url.searchParams.set('to', to);
 
   const normalized = readCatalogueFilters(url.searchParams, knownTopicIds);
-  url.searchParams.delete('topic');
-  for (const id of normalized.topicIds) url.searchParams.append('topic', id);
   for (const key of ['from', 'to']) {
     if (normalized[key]) url.searchParams.set(key, normalized[key]);
     else url.searchParams.delete(key);

@@ -9,15 +9,13 @@
   import { catalogueFiltersUrl, chartTypeId, matchingCharts, matchesReleaseView, readCatalogueFilters } from '$lib/release-filter.js';
   import LazyContent from '$lib/LazyContent.svelte';
   import ChartEmbed from '$lib/ChartEmbed.svelte';
+  import TaxonomyCheckbox from '$lib/TaxonomyCheckbox.svelte';
+  import { buildTaxonomy, matchesTaxonomy, taxonomyLabel, taxonomyState, toggleTaxonomy } from '$lib/taxonomy-filter.js';
 
-  const topics = [
-    { id: 'economy', label: 'Economy', checked: false },
-    { id: 'employmentandlabourmarket', label: 'Employment and labour market', checked: false },
-    { id: 'peoplepopulationandcommunity', label: 'People, population and community', checked: false }
-  ];
-  const knownTopicIds = topics.map(topic => topic.id);
+  const knownThemeIds = ['businessindustryandtrade', 'economy', 'employmentandlabourmarket', 'peoplepopulationandcommunity'];
 
   let data = $state([]);
+  let taxonomy = $derived(buildTaxonomy(data));
   let editionCounts = $derived.by(() => {
     const counts = new Map();
     for (const release of data) {
@@ -35,14 +33,19 @@
   let dateto = $state('');
   let dateTouched = $state({ from: false, to: false });
   let dateRange = $derived(validateDateRange(datefrom, dateto));
-  let filters = $derived(readCatalogueFilters(browser ? $page.url.searchParams : new URLSearchParams(), knownTopicIds));
+  let filters = $derived(readCatalogueFilters(browser ? $page.url.searchParams : new URLSearchParams(), knownThemeIds));
   let filterSignature = $derived.by(() => {
     const { openAll, ...matchingFilters } = filters;
     return JSON.stringify(matchingFilters);
   });
   let openAll = $derived(filters.openAll);
   let showOnlyLatest = $derived(filters.showOnlyLatest);
-  let topicItems = $derived(topics.map(topic => ({ ...topic, checked: filters.topicIds.includes(topic.id) })));
+  let topicGroups = $derived(taxonomy.filter(node => taxonomyState(node, filters.taxonomy).selected > 0));
+  let topicNodes = $derived(topicGroups.flatMap(node => node.children));
+  let subtopicGroups = $derived(topicGroups.flatMap(theme => theme.children
+    .filter(node => taxonomyState(node, filters.taxonomy).selected > 0)
+    .map(node => ({ ...node, parentLabel: theme.label }))));
+  let subtopicNodes = $derived(subtopicGroups.flatMap(node => node.children));
   let chartTypeItems = $derived.by(() => {
     const ids = new Set(filters.chartTypes);
     for (const release of data) {
@@ -119,9 +122,7 @@
       }).sort((first, second) => new Date(second.release_date) - new Date(first.release_date));
     }
 
-    if (filters.topicIds.length) {
-      matchedReleases = matchedReleases.filter(release => filters.topicIds.includes(release.theme));
-    }
+    matchedReleases = matchedReleases.filter(release => matchesTaxonomy(release, filters.taxonomy));
 
     return matchedReleases.filter(release =>
       matchesReleaseView(release, filters) && matchesDateRange(release.release_date, filters)
@@ -136,8 +137,8 @@
       ...current,
       ...(disclosureOnly ? {} : { releaseUri: '', openAll: false }),
       ...patch
-    }, knownTopicIds);
-    const next = readCatalogueFilters(new URL(href, $page.url).searchParams, knownTopicIds);
+    }, knownThemeIds);
+    const next = readCatalogueFilters(new URL(href, $page.url).searchParams, knownThemeIds);
     if (JSON.stringify(next) === JSON.stringify(current)) return;
 
     desiredFilters = next;
@@ -153,11 +154,15 @@
     return navigationQueue;
   }
 
-  function setTopic(item) {
-    const selectedIds = new Set((desiredFilters || filters).topicIds);
-    if (item.checked) selectedIds.add(item.id);
-    else selectedIds.delete(item.id);
-    return commitFilters({ topicIds: [...selectedIds] });
+  function setTaxonomy(path, checked) {
+    return commitFilters({ taxonomy: toggleTaxonomy(taxonomy, (desiredFilters || filters).taxonomy, path, checked) });
+  }
+
+  function taxonomySummary(nodes) {
+    const states = nodes.map(node => taxonomyState(node, filters.taxonomy));
+    const checked = states.filter(state => state.checked).length;
+    const partial = states.filter(state => state.mixed).length;
+    return `(${checked} of ${nodes.length} selected${partial ? `, ${partial} partial` : ''})`;
   }
 
   function applyDates(field, event) {
@@ -211,14 +216,6 @@
 
       <div class="catalogue-filters">
         <h2 class="ons-u-fs-m">Filter releases</h2>
-        <Details title="Editions" headingTag="h3" cls="catalogue-filter">
-            <Checkbox
-              id="latest-only"
-              label="Show only latest edition"
-              item={{ id: 'latest-only', label: 'Show only latest edition', checked: showOnlyLatest }}
-              on:change={event => commitFilters({ showOnlyLatest: event.detail.item.checked })}
-            />
-        </Details>
               <Details title={`Chart types${filters.chartTypes.length ? ` (${filters.chartTypes.length} selected)` : ''}`} headingTag="h3" cls="catalogue-filter">
                 <Input id="chart-type-search" label="Find a chart type" bind:value={chartTypeSearch} />
                 <div class="catalogue-chart-type-options">
@@ -226,8 +223,38 @@
                 </div>
                 {#if !visibleChartTypeItems.length}<p>No chart types match.</p>{/if}
               </Details>
-        <Details title={`Topics${filters.topicIds.length ? ` (${filters.topicIds.length} selected)` : ''}`} headingTag="h3" cls="catalogue-filter">
-              <Checkboxes items={topicItems} title="Topics" hideTitle on:change={event => setTopic(event.detail.item)} />
+        <Details title={`Themes ${taxonomySummary(taxonomy)}`} headingTag="h3" cls="catalogue-filter">
+          {#each taxonomy as node (node.path)}
+            <TaxonomyCheckbox {node} selection={filters.taxonomy} onchange={setTaxonomy} />
+          {/each}
+        </Details>
+        <Details title={`Topics ${taxonomySummary(topicNodes)}`} headingTag="h3" cls="catalogue-filter">
+          <div class="catalogue-taxonomy-options">
+            {#each topicGroups as group (group.path)}
+              <fieldset class="ons-fieldset catalogue-taxonomy-group">
+                <legend class="catalogue-taxonomy-legend">{group.label}</legend>
+                {#each group.children as node (node.path)}
+                  <TaxonomyCheckbox {node} selection={filters.taxonomy} onchange={setTaxonomy} />
+                {/each}
+              </fieldset>
+            {:else}
+              <p>No topics available for the selected themes.</p>
+            {/each}
+          </div>
+        </Details>
+        <Details title={`Subtopics ${taxonomySummary(subtopicNodes)}`} headingTag="h3" cls="catalogue-filter">
+          <div class="catalogue-taxonomy-options">
+            {#each subtopicGroups as group (group.path)}
+              <fieldset class="ons-fieldset catalogue-taxonomy-group">
+                <legend class="catalogue-taxonomy-legend">{group.parentLabel}: {group.label}</legend>
+                {#each group.children as node (node.path)}
+                  <TaxonomyCheckbox {node} selection={filters.taxonomy} onchange={setTaxonomy} />
+                {/each}
+              </fieldset>
+            {:else}
+              <p>No subtopics available for the selected topics.</p>
+            {/each}
+          </div>
         </Details>
         <Details title="Date range" headingTag="h3" cls="catalogue-filter">
             <div class="catalogue-dates">
@@ -250,6 +277,14 @@
                 />
               </div>
             </div>
+        </Details>
+        <Details title="Editions" headingTag="h3" cls="catalogue-filter">
+          <Checkbox
+            id="latest-only"
+            label="Show only latest edition"
+            item={{ id: 'latest-only', label: 'Show only latest edition', checked: showOnlyLatest }}
+            on:change={event => commitFilters({ showOnlyLatest: event.detail.item.checked })}
+          />
         </Details>
       </div>
       </aside>
@@ -280,7 +315,7 @@
               {@const release = result.release}
               {@const charts = result.charts}
               {@const totalCharts = (release.vis || []).length}
-              {@const topic = topics.find(topic => topic.id === release.theme)}
+              {@const theme = taxonomyLabel(release.theme)}
               <li class="catalogue-release">
                 <LazyContent>
                 <div class="catalogue-release-summary">
@@ -288,7 +323,7 @@
                     <h3 class="catalogue-release-title ons-u-fs-m">
                       <a href={release.doc_uri} target="_blank" rel="noopener noreferrer">{release.title}</a>
                     </h3>
-                    {#if topic}<p class="catalogue-release-topic">{topic.label}</p>{/if}
+                    <p class="catalogue-release-topic">{theme}</p>
                     <p class="catalogue-release-edition">{release.edition?.trim() ? `Edition: ${release.edition}` : 'Edition not available'}</p>
                     <p class="catalogue-release-meta">
                       Release date: {d3.timeFormat('%d/%m/%Y')(new Date(release.release_date))}
@@ -296,12 +331,12 @@
                     </p>
                     {#if release.series?.trim()}
                       <p class="catalogue-series-link">
-                        <a href={catalogueFiltersUrl($page.url, { search: release.series, showOnlyLatest: false }, knownTopicIds)} aria-label={`View all editions of ${release.series} (${editionCounts.get(release.series)})`}>View all editions ({editionCounts.get(release.series)})</a>
+                        <a href={catalogueFiltersUrl($page.url, { search: release.series, showOnlyLatest: false }, knownThemeIds)} aria-label={`View all editions of ${release.series} (${editionCounts.get(release.series)})`}>View all editions ({editionCounts.get(release.series)})</a>
                       </p>
                     {/if}
                     {#if charts.length < totalCharts}
                       <p class="catalogue-series-link">
-                        <a href={catalogueFiltersUrl($page.url, { releaseUri: release.doc_uri, showOnlyLatest: false, openAll: true }, knownTopicIds)}>See all charts in release</a>
+                        <a href={catalogueFiltersUrl($page.url, { releaseUri: release.doc_uri, showOnlyLatest: false, openAll: true }, knownThemeIds)}>See all charts in release</a>
                       </p>
                     {/if}
                   </div>

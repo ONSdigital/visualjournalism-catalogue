@@ -63,21 +63,22 @@ test('latest toggles keep series context and returning to catalogue restores the
 });
 
 const topicIds = ['economy', 'employmentandlabourmarket', 'peoplepopulationandcommunity'];
+const allTaxonomy = { mode: 'exclude', paths: [] };
 
 test('reads complete default filters and normalizes known topics', () => {
   assert.deepEqual(readCatalogueFilters(new URLSearchParams(), topicIds), {
-    series: '', showOnlyLatest: true, search: '', topicIds: [], chartTypes: [], releaseUri: '', openAll: false, from: '', to: ''
+    series: '', showOnlyLatest: true, search: '', taxonomy: allTaxonomy, chartTypes: [], releaseUri: '', openAll: false, from: '', to: ''
   });
   const params = new URLSearchParams('topic=unknown&topic=employmentandlabourmarket&topic=economy&topic=economy&q=++GDP++');
   const filters = readCatalogueFilters(params, topicIds);
-  assert.deepEqual(filters.topicIds, topicIds.slice(0, 2));
+  assert.deepEqual(filters.taxonomy, { mode: 'include', paths: topicIds.slice(0, 2) });
   assert.equal(filters.search, 'GDP');
 });
 
 test('round-trips combined filters without losing operators or special characters', () => {
   const current = new URL('https://example.test/onsvj-catalogue/?other=value#results');
   const filters = {
-    search: '"Pay & income" OR costs + prices', topicIds: topicIds.slice(0, 2),
+    search: '"Pay & income" OR costs + prices', taxonomy: { mode: 'include', paths: topicIds.slice(0, 2) },
     from: '2024-02-29', to: '2025-01-31', series: 'Caf\u00e9 & costs + UK', showOnlyLatest: true,
     chartTypes: ['bar-chart', 'line-chart'], releaseUri: '', openAll: false
   };
@@ -103,7 +104,7 @@ test('series and default destinations explicitly clear every other managed filte
   const current = new URL('https://example.test/?q=GDP&topic=economy&from=2024-01-01&to=2025-01-01&latest=false&other=value');
   const target = new URL(catalogueFiltersUrl(current, { series: 'GDP' }, topicIds), current);
   assert.deepEqual(readCatalogueFilters(target.searchParams, topicIds), {
-    series: 'GDP', showOnlyLatest: false, search: '', topicIds: [], chartTypes: [], releaseUri: '', openAll: false, from: '', to: ''
+    series: 'GDP', showOnlyLatest: false, search: '', taxonomy: allTaxonomy, chartTypes: [], releaseUri: '', openAll: false, from: '', to: ''
   });
   const defaults = new URL(catalogueFiltersUrl(target, {}, topicIds), target);
   assert.equal(defaults.search, '?other=value');
@@ -114,7 +115,7 @@ test('canonical URLs omit defaults, unknown topics and invalid dates', () => {
   const href = catalogueFiltersUrl(current, {
     search: '   ', topicIds: ['unknown', 'economy', 'economy'], from: 'bad', to: '2025-01-01'
   }, topicIds);
-  assert.equal(href, '/?topic=economy');
+  assert.equal(href, '/?taxMode=include&tax=economy');
   assert.equal(catalogueFiltersUrl(current, {}, topicIds), '/');
 });
 
@@ -126,7 +127,7 @@ test('all-editions search uses the series title and clears other filters', () =>
   }, topicIds), current);
 
   assert.deepEqual(readCatalogueFilters(target.searchParams, topicIds), {
-    series: '', search: series, showOnlyLatest: false, topicIds: [], chartTypes: [], releaseUri: '', openAll: false, from: '', to: ''
+    series: '', search: series, showOnlyLatest: false, taxonomy: allTaxonomy, chartTypes: [], releaseUri: '', openAll: false, from: '', to: ''
   });
   assert.equal(target.searchParams.has('series'), false);
   assert.equal(target.searchParams.get('q'), series);
@@ -168,7 +169,7 @@ test('exact-release links clear all filters and round-trip historical releases w
   }, topicIds), current);
   const filters = readCatalogueFilters(target.searchParams, topicIds);
   assert.deepEqual(filters, {
-    series: '', showOnlyLatest: false, search: '', topicIds: [], chartTypes: [],
+    series: '', showOnlyLatest: false, search: '', taxonomy: allTaxonomy, chartTypes: [],
     releaseUri, openAll: true, from: '', to: ''
   });
   assert.equal(target.searchParams.get('release'), releaseUri);
@@ -181,4 +182,26 @@ test('exact-release links clear all filters and round-trip historical releases w
   assert.equal(allEditions.searchParams.has('release'), false);
   assert.equal(allEditions.searchParams.has('openAll'), false);
   assert.equal(allEditions.searchParams.has('chartType'), false);
+});
+
+test('taxonomy URLs preserve all, none, exceptions and legacy theme links', () => {
+  const current = new URL('https://example.test/catalogue/?topic=economy&tax=old&other=value');
+  for (const taxonomy of [allTaxonomy, { mode: 'include', paths: [] },
+    { mode: 'exclude', paths: ['economy/accounts/~', 'people'] },
+    { mode: 'include', paths: ['economy/accounts'] }]) {
+    const target = new URL(catalogueFiltersUrl(current, { taxonomy }, topicIds), current);
+    assert.deepEqual(readCatalogueFilters(target.searchParams, topicIds).taxonomy, taxonomy);
+    assert.equal(target.searchParams.has('topic'), false);
+    assert.equal(target.searchParams.get('other'), 'value');
+    assert.equal(target.pathname, '/catalogue/');
+  }
+  const legacy = readCatalogueFilters(new URLSearchParams('topic=economy'), topicIds);
+  const upgraded = new URL(catalogueFiltersUrl(current, legacy, topicIds), current);
+  assert.deepEqual(readCatalogueFilters(upgraded.searchParams, topicIds).taxonomy, { mode: 'include', paths: ['economy'] });
+  assert.deepEqual(readCatalogueFilters(new URLSearchParams('topic=economy&tax=people'), topicIds).taxonomy, {
+    mode: 'exclude', paths: ['people']
+  });
+  assert.deepEqual(readCatalogueFilters(new URLSearchParams('taxMode=include&tax=../bad')).taxonomy, {
+    mode: 'include', paths: []
+  });
 });
