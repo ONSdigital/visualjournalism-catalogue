@@ -1,5 +1,5 @@
 <script>
-  import { Embed, Input, Button, Checkbox, Checkboxes, DocumentList, Details } from '@onsvisual/svelte-components';
+  import { Embed, Input, Button, Checkbox, Checkboxes, DocumentList, Details, Icon } from '@onsvisual/svelte-components';
   import { onMount, untrack } from 'svelte';
   import { browser } from '$app/environment';
   import { beforeNavigate, goto } from '$app/navigation';
@@ -26,6 +26,7 @@
   let mounted = $state(false);
   let loadError = $state(false);
   let searchInputText = $state('');
+  let searchField = $state(null);
   let chartTypeSearch = $state('');
   let expandedRelease = $state(null);
   let showNumber = $state(18);
@@ -154,6 +155,12 @@
     return navigationQueue;
   }
 
+  function clearSearch() {
+    searchInputText = '';
+    searchField?.querySelector('input')?.focus();
+    return commitFilters({ search: '' });
+  }
+
   function setTaxonomy(path, checked) {
     return commitFilters({ taxonomy: toggleTaxonomy(taxonomy, (desiredFilters || filters).taxonomy, path, checked) });
   }
@@ -210,7 +217,14 @@
       <div class="catalogue-layout">
       <aside class="catalogue-sidebar" aria-label="Search and filter releases">
       <form class="catalogue-search" role="search" onsubmit={event => { event.preventDefault(); commitFilters({ search: searchInputText }); }}>
-        <Input id="release-search" label="Search release titles" bind:value={searchInputText} />
+        <div class="catalogue-search-field" bind:this={searchField}>
+          <Input id="release-search" label="Search release titles" bind:value={searchInputText} />
+          {#if searchInputText || filters.search}
+            <button type="button" class="catalogue-search-clear" title="Clear search" aria-label="Clear search" onclick={clearSearch}>
+              <Icon type="cross" />
+            </button>
+          {/if}
+        </div>
         <Button type="submit" icon="search">Search</Button>
       </form>
 
