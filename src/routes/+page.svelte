@@ -159,6 +159,18 @@
     return commitFilters({ search: '' });
   }
 
+  function clearAllFilters() {
+    navigationVersion += 1;
+    desiredFilters = null;
+    navigationQueue = Promise.resolve();
+    searchInputText = '';
+    chartTypeSearch = '';
+    datefrom = '';
+    dateto = '';
+    dateTouched = { from: false, to: false };
+    showNumber = 18;
+  }
+
   function setTaxonomy(path, checked) {
     return commitFilters({ taxonomy: toggleTaxonomy(taxonomy, (desiredFilters || filters).taxonomy, path, checked) });
   }
@@ -303,6 +315,7 @@
             on:change={event => commitFilters({ showOnlyLatest: event.detail.item.checked })}
           />
         </Details>
+        <Button variant="secondary" href={$page.url.pathname} cls="catalogue-clear-filters" on:click={clearAllFilters}>Clear all filters</Button>
       </div>
       </aside>
 

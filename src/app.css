@@ -130,6 +130,10 @@
 	margin-bottom: 32px;
 }
 
+.catalogue-clear-filters {
+	margin-top: 16px;
+}
+
 .catalogue-filters > h2 {
 	margin: 0 0 12px;
 }
@@ -316,6 +320,8 @@
 
 .catalogue-release-details .ons-details__content {
 	margin-top: 16px;
+	border-left: 0;
+	padding-left: 0;
 }
 
 .catalogue-chart + .catalogue-chart {
